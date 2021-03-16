@@ -7,11 +7,15 @@ object Stream {
   def main(args: Array[String]): Unit = {
     val ssc: SparkSession = SparkSession.builder()
       .master("local[*]")
-      .appName("FutureTestSpark")
+      .appName("SparkStreaming")
       .getOrCreate()
 
-    val stream_in = "/home/cassiogiehl/code/FutureScala/src/main/scala/Files/stream_in"
-    val stream_out = "/home/cassiogiehl/code/FutureScala/src/main/scala/Files/stream_out"
+//    val stream_in = "/home/cassiogiehl/code/FutureScala/src/main/scala/Files/stream_in"
+    val stream_in = "hdfs://127.0.0.1:9000/streaming/input"
+//    val stream_out = "/home/cassiogiehl/code/FutureScala/src/main/scala/Files/stream_out/"
+    val stream_out = "hdfs://127.0.0.1:9000/streaming/output/"
+//    val check_location = "/home/cassiogiehl/code/FutureScala/src/main/scala/Files/checkpoint_location/"
+    val check_location = "hdfs://127.0.0.1:9000/streaming/checkpoint_location/"
 
     val df = ssc.readStream
       .format("csv")
@@ -26,14 +30,16 @@ object Stream {
     val transformation = ssc.sql(
       s"""SELECT
                     municipio,
-                    sum(replace(outros, ".000", "")) AS quantidade
+                    cast(replace(outros, ".000", "") as float) AS quantidade
                   FROM municipios_ibge
-                  GROUP BY municipio""")
+                  """)
 
     val consoleOutput = transformation.writeStream
-      .format("console")
+      .format("parquet")
+      .option("path", stream_out)
       .option("truncate", false)
-      .outputMode(OutputMode.Complete())
+      .option("checkpointLocation", check_location)
+      .outputMode(OutputMode.Append())
       .trigger(Trigger.ProcessingTime("5 seconds"))
       .start()
 
